@@ -1,8 +1,15 @@
 #pragma once
+
 #include <string_view>
+#include <string>
 #include <array>
 #include <cstdint>
 #include <concepts>
+#include <variant>
+#include <initializer_list>
+#include <stdexcept>
+
+namespace noble {
 
 using tag_base = std::uint8_t;
 
@@ -62,3 +69,50 @@ struct Token {
     token_tag tag;
     std::string_view view;
 };
+
+class ParserError : public std::exception {
+    public :
+    std::string msg;
+    ParserError(const std::string& e) : msg(e) {}
+    ParserError(std::string&& e) : msg(std::move(e)) {}
+
+    const char* what() const noexcept override { return msg.c_str(); }
+};
+
+using int_t = std::uint32_t;
+    using float_t = double;
+
+    constexpr std::size_t INT_LEN = sizeof(int_t);
+    constexpr std::size_t FLOAT_LEN = sizeof(float_t);
+
+    using Value = std::variant<std::monostate, int_t, float_t>;
+
+    namespace hlpr {
+        struct v_info {
+            const char* name = "UNKNOWN";
+        };
+
+        template <typename T> struct vinfo_select
+            { static constexpr v_info info{}; };
+        
+        template <> struct vinfo_select<int_t>
+            { static constexpr v_info info{"INTEGER"}; };
+        
+        template <> struct vinfo_select<float_t>
+            { static constexpr v_info info{"FLOAT"}; };
+
+        template <> struct vinfo_select<std::monostate>
+            { static constexpr v_info info{"NONE"}; };
+    }
+
+    template <typename T>
+    constexpr const hlpr::v_info& tell_info() { return hlpr::vinfo_select<T>::info; }
+
+    constexpr const hlpr::v_info& tell_info(const Value& v) {
+        return std::visit([](auto&& arg) -> const hlpr::v_info& {
+            using T = std::remove_cvref_t<decltype(arg)>;
+            return tell_info<T>();
+        }, v);
+    }
+
+}
